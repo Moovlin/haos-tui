@@ -25,7 +25,11 @@ impl Config {
 
 fn read_toml(config_path: String) -> Config {
     let config_string = fs::read_to_string(config_path).expect("Could not access the file");
-    toml::from_str(&config_string).unwrap()
+    let config_toml = toml::from_str(&config_string);
+    match config_toml {
+        Ok(config) => config,
+        Err(e) => panic!("Couldn't access file. Threw {}", e),
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -48,18 +52,30 @@ fn main() -> Result<()>{
         .arg(arg!(-c --config <FILE>).required(false).default_value(Args::default().config_path.as_str()))
         .get_matches();
     
-    //let rt = tokio::runtime::Runtime::new().unwrap();
     let rt = tokio::runtime::Builder::new_current_thread().enable_all()
         .build()?;
-    let args = Args {config_path: String::from(matches.get_one::<String>("config").unwrap())};
+    let args = Args {config_path: String::from(matches.get_one::<String>("config").expect("Did not supply a value for config and a home value wasn't set."))};
     
     let config = Config::new(args);
     let haos_conn = HomeAssistantConnection::new(config.url, config.client_id);
-    haos_conn.write().unwrap().set_long_live_token(config.token);
-    let events = rt.block_on(haos_conn.try_read().unwrap().get_events()).unwrap();
+
+    haos_conn.write().expect("Could not get write lock").set_long_live_token(config.token);
+    let working_haos_conn = match haos_conn.read() { Ok(v) => v, Err(e) => panic!("Couldn't get read lock: {}", e)};
+    let events = match rt.block_on(working_haos_conn.get_events()) {Ok(v) => v, Err(_) => panic!("Couldn't access the resouce")};
     for evnt in events {
         info!("Event: {}, listeners: {}", evnt.event, evnt.listener_count);
     }
+    drop(working_haos_conn);
+
+    let working_haos_conn = match haos_conn.read() { Ok(v) => v, Err(e) => panic!("Couldn't get read lock: {}", e)};
+    info!("Firing an event to test that things work. This is annoying but hey, I'm provind a point here");
+    //let resp = rt.block_on(haos_conn.write().expect("Could not get write lock").fire_event(String::from("garbage_collection_loaded"), Some("{\"data\": \"\"}")));
+    let resp = match rt.block_on(working_haos_conn.fire_event(String::from("garbage_collection_loaded"), Some("{\"data\": \"\"}"))) {
+        Ok(v) => v,
+        Err(e) => panic!("Couldn't fire the event: {:?}", e),
+    };
+    info!("{}", resp);
+    drop(working_haos_conn);
 
     Ok(())
 }

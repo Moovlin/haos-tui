@@ -1,5 +1,7 @@
 use std::{fmt::Display, sync::Arc, sync::RwLock, sync::Weak, thread::Result};
 
+use log::{debug, info, error};
+
 use std::error::Error;
 use serde::{Serialize, Deserialize};
 
@@ -37,30 +39,35 @@ impl HomeAssistantConnection {
         Ok(resp_json)
     }
 
-    pub async fn fire_event(self, event_type: String, event_data: Option<impl serde::Serialize>) -> Result<String>{
+    pub async fn fire_event(&self, event_type: String, event_data: Option<impl serde::Serialize + std::fmt::Display>) -> Result<String>{
         let api = format!("{}/api/events/{}", self.url, event_type);
         let str_token = self.get_token();
         let mut req = reqwest::Client::new().post(api.as_str()).header("content-type", "application/json").bearer_auth(str_token);
 
         if let Some(data) = event_data {
-            req = req.json(&data);
+            debug!("{}", &data);
+            //req = req.json(&data);
         }
 
-        let resp = req.send().await.unwrap();
+        let resp = match req.send().await {
+            Ok(v) => v,
+            Err(_) => panic!("Couldn't send the message"),
+        };
+
 
         #[derive(Serialize, Deserialize, Debug)]
         struct Response {
             message: String,
         }
             
-        let resp_json: Response = resp.json().await.unwrap();
+        let resp_json: Response = match resp.json().await {Ok(v) => v, Err(_) => panic!("Couldn't parse the json response")};
         Ok(resp_json.message)
 
     }
 
     fn get_token(&self) -> &str {
-        let str_token = match &self.token {Token::LongLivedToken(str) => Ok(str), Token::None => Err("no") }.unwrap();
-        str_token
+        let str_token = match &self.token {Token::LongLivedToken(str) => Ok(str), Token::None => Err("no") };
+        match str_token { Ok(v) => v, Err(e) => e}
     }
 
 }

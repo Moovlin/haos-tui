@@ -9,6 +9,7 @@ pub struct HomeAssistantConnection {
    pub url: String, 
    pub token: Token,
    pub client_id: String, 
+   pub retries: i32,
    pub lock: Weak<RwLock<Self>>,
 }
 
