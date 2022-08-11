@@ -17,6 +17,7 @@ impl HomeAssistantConnection {
             token,
             client_id,
             lock: Weak::new(),
+            retries: 30,
         }));
         
         ret.write().unwrap().lock = Arc::downgrade(&ret);
@@ -68,6 +69,20 @@ impl HomeAssistantConnection {
     fn get_token(&self) -> &str {
         let str_token = match &self.token {Token::LongLivedToken(str) => Ok(str), Token::None => Err("no") };
         match str_token { Ok(v) => v, Err(e) => e}
+    }
+
+    pub async fn get_services(&self) -> Result<Vec<types::Service>> {
+        let api = format!("{}/api/services", self.url);
+        let str_token = self.get_token();
+        let req = reqwest::Client::new().get(api.as_str()).header("content-type", "application/json").bearer_auth(str_token);
+        
+        let resp = match req.send().await {Ok(v) => v, Err(_) => panic!("Could not get services response")};
+
+        let resp_json: Vec<types::Service> = match resp.json().await {Ok(v) => v, Err(e) => panic!("Couldn't parse the json response:{}", e)};
+        //let resp_string = match resp.text().await {Ok(v) => v, Err(_) => panic!("Couldn't get the text of the response")};
+        //info!("{}", &resp_string);
+        //let resp_json: Vec<types::Service> = match serde_json::from_str(resp_string.as_str()) {Ok(v) => v, Err(_) => panic!("Couldn't parse the json")};
+        Ok(resp_json)
     }
 
 }

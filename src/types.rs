@@ -1,4 +1,4 @@
-use std::sync::{RwLock, Weak};
+use std::{sync::{RwLock, Weak}, collections::HashMap};
 
 
 use serde::{Serialize, Deserialize};
@@ -25,6 +25,13 @@ pub struct Event {
    pub event: String, 
    pub listener_count: i32,
 
+}
+
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct Service {
+    pub domain: String,
+    pub services: HashMap<String, serde_json::Map<String, serde_json::Value>>,
 }
 
 

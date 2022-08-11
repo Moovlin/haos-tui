@@ -1,5 +1,7 @@
 use log::{info, warn, debug, error};
 
+use string_builder::Builder;
+
 use tokio::io::Result;
 use haoscli::types::{HomeAssistantConnection, self};
 
@@ -76,6 +78,27 @@ fn main() -> Result<()>{
     };
     info!("{}", resp);
     drop(working_haos_conn);
+
+
+    let working_haos_conn = match haos_conn.read() {Ok(v) => v, Err(e) => panic!("Couldn't get read lock: {}", e)};
+    info!("Getting the service list to test that things work.");
+    let services = match rt.block_on(working_haos_conn.get_services()) {Ok(v) => v, Err(_) => panic!("Couldn't get the services")};
+    let mut string_builder: Builder = Builder::default();
+    for service in services {
+        string_builder.append(format!("{}\n", service.domain));
+        for (service_info, detail) in service.services{
+            
+            string_builder.append(format!("\t{},", service_info));
+            for (key, value) in detail {
+                string_builder.append(format!("{},{}\n", key, value));
+            }
+            string_builder.append("\n");
+        }
+    }
+    let output_string = match string_builder.string() {Ok(v) => v, Err(e) => panic!("Couldn't build string: {}", e)};
+    info!("{}", output_string);
+    drop(working_haos_conn);
+
 
     Ok(())
 }
