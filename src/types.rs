@@ -31,7 +31,13 @@ pub struct Event {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Service {
     pub domain: String,
-    pub services: HashMap<String, serde_json::Map<String, serde_json::Value>>,
+    //pub services: HashMap<String, serde_json::Map<String, serde_json::Value>>,
+    pub services: serde_json::Value,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct RequestEntityObject<'a> {
+    pub entity_id: &'a str,
 }
 
 

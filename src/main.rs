@@ -7,7 +7,9 @@ use haoscli::types::{HomeAssistantConnection, self};
 
 use serde::Deserialize;
 
-use std::{fs, env};
+use serde_json::{to_string_pretty, json};
+
+use std::{fs, env,option::Option};
 //use toml::{toml, from_str};
 
 use clap::{arg, command};
@@ -86,19 +88,25 @@ fn main() -> Result<()>{
     let mut string_builder: Builder = Builder::default();
     for service in services {
         string_builder.append(format!("{}\n", service.domain));
-        for (service_info, detail) in service.services{
-            
-            string_builder.append(format!("\t{},", service_info));
-            for (key, value) in detail {
-                string_builder.append(format!("{},{}\n", key, value));
-            }
+            //string_builder.append(serde_json::to_string_pretty(service.services.as_object().unwrap()).unwrap());
             string_builder.append("\n");
-        }
     }
     let output_string = match string_builder.string() {Ok(v) => v, Err(e) => panic!("Couldn't build string: {}", e)};
     info!("{}", output_string);
     drop(working_haos_conn);
 
+    let working_haos_conn = match haos_conn.read() {Ok(v) => v, Err(e) => panic!("Couldn't get read lock: {}",e)};
+    let test_service = types::Service {domain: String::from("light"), services: json!("turn_on")};
+    let test_entity = types::RequestEntityObject{entity_id: "light.floor_lamp_level_light_color_on_off"};
+
+    let resp = match rt.block_on(working_haos_conn.set_service(test_service, Some(&test_entity))) {
+        Ok(v) => v,
+        Err(_) => panic!("Couldn't get a response"),
+    };
+
+    info!("{}", resp);
+
+    drop(working_haos_conn);
 
     Ok(())
 }

@@ -1,6 +1,7 @@
 use std::{fmt::Display, sync::Arc, sync::RwLock, sync::Weak, thread::Result};
 
 use log::{debug, info, error};
+use reqwest::Response;
 
 use std::error::Error;
 use serde::{Serialize, Deserialize};
@@ -82,6 +83,23 @@ impl HomeAssistantConnection {
         //let resp_string = match resp.text().await {Ok(v) => v, Err(_) => panic!("Couldn't get the text of the response")};
         //info!("{}", &resp_string);
         //let resp_json: Vec<types::Service> = match serde_json::from_str(resp_string.as_str()) {Ok(v) => v, Err(_) => panic!("Couldn't parse the json")};
+        Ok(resp_json)
+    }
+
+    pub async fn set_service(&self, service: types::Service, entity: Option<&'_ types::RequestEntityObject<'_>>) -> Result<serde_json::Value> {
+        let api = format!("{}/api/services/{}/{}", self.url, service.domain, service.services.as_str().unwrap());
+        
+        let str_token = self.get_token();
+        let mut req = reqwest::Client::new().post(api.as_str()).header("content-type", "application/json").bearer_auth(str_token);
+        match entity {
+            Some(v) => req = req.json(&v),
+            None => (),
+        }
+        let resp = match req.send().await {Ok(v) => v, Err(e) => panic!("Could not post to service: {}", e)};
+        info!("{:?}", resp);
+
+        let resp_json: serde_json::Value = match resp.json().await {Ok(v) => v, Err(_) => panic!("Couldn't parse the json response")};
+
         Ok(resp_json)
     }
 
