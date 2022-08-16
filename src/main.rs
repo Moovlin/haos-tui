@@ -5,12 +5,17 @@ use string_builder::Builder;
 use tokio::io::Result;
 use haoscli::types::{HomeAssistantConnection, self};
 
+
 use serde::Deserialize;
 
 use serde_json::{to_string_pretty, json};
 
 use std::{fs, env,option::Option};
+
+use std::sync::{Arc, Mutex, Condvar};
 //use toml::{toml, from_str};
+//
+mod ui;
 
 use clap::{arg, command};
 
@@ -66,7 +71,7 @@ fn main() -> Result<()>{
     haos_conn.write().expect("Could not get write lock").set_long_live_token(config.token);
     let working_haos_conn = match haos_conn.read() { Ok(v) => v, Err(e) => panic!("Couldn't get read lock: {}", e)};
     let events = match rt.block_on(working_haos_conn.get_events()) {Ok(v) => v, Err(_) => panic!("Couldn't access the resouce")};
-    for evnt in events {
+    for evnt in events.iter() {
         info!("Event: {}, listeners: {}", evnt.event, evnt.listener_count);
     }
     drop(working_haos_conn);
@@ -86,7 +91,7 @@ fn main() -> Result<()>{
     info!("Getting the service list to test that things work.");
     let services = match rt.block_on(working_haos_conn.get_services()) {Ok(v) => v, Err(_) => panic!("Couldn't get the services")};
     let mut string_builder: Builder = Builder::default();
-    for service in services {
+    for service in services.iter() {
         string_builder.append(format!("{}\n", service.domain));
             //string_builder.append(serde_json::to_string_pretty(service.services.as_object().unwrap()).unwrap());
             string_builder.append("\n");
@@ -107,6 +112,21 @@ fn main() -> Result<()>{
     info!("{}", resp);
 
     drop(working_haos_conn);
+
+    let mut locked_state = Arc::new(Mutex::new(
+            ui::UiState {
+                events,
+                services,
+            }
+            ));
+
+
+    let mut convar = Arc::new(Condvar::new());
+
+    let mut convar_for_painter = Arc::clone(&convar);
+    let mut state_for_painter = Arc::clone(&locked_state);
+
+    ui::draw_ui(&mut state_for_painter, &mut convar_for_painter);
 
     Ok(())
 }

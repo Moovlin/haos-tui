@@ -1,8 +1,10 @@
-use std::{sync::{RwLock, Weak}, collections::HashMap};
+use std::{sync::{RwLock, Weak}, collections::HashMap, convert::From};
 
 
 use serde::{Serialize, Deserialize};
 use thiserror::Error;
+
+use tui::widgets::ListItem;
 
 #[derive(Debug)]
 pub struct HomeAssistantConnection {
@@ -25,6 +27,12 @@ pub struct Event {
    pub event: String, 
    pub listener_count: i32,
 
+}
+
+impl From<Vec<Event>> for Vec<ListItem<_>>{
+    fn from(event: Event) -> Self {
+        Event { event: event.event, listener_count: event.listener_count}
+    }
 }
 
 
