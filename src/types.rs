@@ -29,12 +29,6 @@ pub struct Event {
 
 }
 
-impl From<Vec<Event>> for Vec<ListItem<_>>{
-    fn from(event: Event) -> Self {
-        Event { event: event.event, listener_count: event.listener_count}
-    }
-}
-
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Service {

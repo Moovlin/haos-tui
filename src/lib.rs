@@ -32,11 +32,12 @@ impl HomeAssistantConnection {
 
     pub async fn get_events(&self) -> Result<Vec<types::Event>>{
         let api = format!("{}/api/events", self.url);
+        debug!("{}", api);
         let str_token = self.get_token();
         let req = reqwest::Client::new().get(api.as_str()).header("content-type", "application/json").bearer_auth(str_token);
 
         let resp = req.send().await.unwrap();
-        let resp_json: Vec<types::Event> = resp.json().await.unwrap();
+        let resp_json: Vec<types::Event> = resp.json().await.expect("Could not convert to json");
 
         Ok(resp_json)
     }
@@ -79,11 +80,13 @@ impl HomeAssistantConnection {
         
         let resp = match req.send().await {Ok(v) => v, Err(_) => panic!("Could not get services response")};
 
-        let resp_json: Vec<types::Service> = match resp.json().await {Ok(v) => v, Err(e) => panic!("Couldn't parse the json response:{}", e)};
+        debug!("{}", resp.text().await.expect("Couldn't get the text"));
+        //let resp_json: Vec<types::Service> = match resp.json().await {Ok(v) => v, Err(e) => panic!("Couldn't parse the json response:\t{}", e)};
         //let resp_string = match resp.text().await {Ok(v) => v, Err(_) => panic!("Couldn't get the text of the response")};
         //info!("{}", &resp_string);
         //let resp_json: Vec<types::Service> = match serde_json::from_str(resp_string.as_str()) {Ok(v) => v, Err(_) => panic!("Couldn't parse the json")};
-        Ok(resp_json)
+        //Ok(resp_json)
+        Ok(vec!(types::Service{domain: String::from("domain"), services: serde_json::from_str("{}").unwrap()}))
     }
 
     pub async fn set_service(&self, service: types::Service, entity: Option<&'_ types::RequestEntityObject<'_>>) -> Result<serde_json::Value> {

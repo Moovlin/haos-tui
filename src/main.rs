@@ -3,21 +3,30 @@ use log::{info, warn, debug, error};
 use string_builder::Builder;
 
 use tokio::io::Result;
-use haoscli::types::{HomeAssistantConnection, self};
+use haoscli::types::{HomeAssistantConnection, Event, self};
 
 
 use serde::Deserialize;
 
 use serde_json::{to_string_pretty, json};
 
-use std::{fs, env,option::Option};
+use std::{fs, env,option::Option, thread::spawn};
 
 use std::sync::{Arc, Mutex, Condvar};
-//use toml::{toml, from_str};
-//
+
+
 mod ui;
+mod key_handler;
+mod fetcher;
+
 
 use clap::{arg, command};
+
+use crate::key_handler::key_handler;
+use crate::fetcher::fetcher;
+
+use log::LevelFilter;
+
 
 #[derive(Deserialize)]
 struct Config {
@@ -56,26 +65,26 @@ impl Default for Args {
 }
 
 fn main() -> Result<()>{
-    env_logger::init();
+    simple_logging::log_to_file("log.txt", LevelFilter::Trace).expect("File doesn't exist. This should create the file or smthing I guess.");
     let matches = command!()
         .arg(arg!(-c --config <FILE>).required(false).default_value(Args::default().config_path.as_str()))
         .get_matches();
     
+    /*
     let rt = tokio::runtime::Builder::new_current_thread().enable_all()
         .build()?;
+    */
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+
     let args = Args {config_path: String::from(matches.get_one::<String>("config").expect("Did not supply a value for config and a home value wasn't set."))};
     
     let config = Config::new(args);
     let haos_conn = HomeAssistantConnection::new(config.url, config.client_id);
 
-    haos_conn.write().expect("Could not get write lock").set_long_live_token(config.token);
-    let working_haos_conn = match haos_conn.read() { Ok(v) => v, Err(e) => panic!("Couldn't get read lock: {}", e)};
-    let events = match rt.block_on(working_haos_conn.get_events()) {Ok(v) => v, Err(_) => panic!("Couldn't access the resouce")};
-    for evnt in events.iter() {
-        info!("Event: {}, listeners: {}", evnt.event, evnt.listener_count);
-    }
-    drop(working_haos_conn);
-
+    
+    /*
     let working_haos_conn = match haos_conn.read() { Ok(v) => v, Err(e) => panic!("Couldn't get read lock: {}", e)};
     info!("Firing an event to test that things work. This is annoying but hey, I'm provind a point here");
     //let resp = rt.block_on(haos_conn.write().expect("Could not get write lock").fire_event(String::from("garbage_collection_loaded"), Some("{\"data\": \"\"}")));
@@ -85,7 +94,7 @@ fn main() -> Result<()>{
     };
     info!("{}", resp);
     drop(working_haos_conn);
-
+    */
 
     let working_haos_conn = match haos_conn.read() {Ok(v) => v, Err(e) => panic!("Couldn't get read lock: {}", e)};
     info!("Getting the service list to test that things work.");
@@ -100,6 +109,7 @@ fn main() -> Result<()>{
     info!("{}", output_string);
     drop(working_haos_conn);
 
+    /*
     let working_haos_conn = match haos_conn.read() {Ok(v) => v, Err(e) => panic!("Couldn't get read lock: {}",e)};
     let test_service = types::Service {domain: String::from("light"), services: json!("turn_on")};
     let test_entity = types::RequestEntityObject{entity_id: "light.floor_lamp_level_light_color_on_off"};
@@ -110,12 +120,13 @@ fn main() -> Result<()>{
     };
 
     info!("{}", resp);
-
     drop(working_haos_conn);
+    */
 
     let mut locked_state = Arc::new(Mutex::new(
             ui::UiState {
-                events,
+                active: true,
+                events: vec!(Event{event: String::from(""), listener_count: -1}),
                 services,
             }
             ));
@@ -126,7 +137,32 @@ fn main() -> Result<()>{
     let mut convar_for_painter = Arc::clone(&convar);
     let mut state_for_painter = Arc::clone(&locked_state);
 
+
+    let mut convar_for_fetcher = Arc::clone(&convar);
+    let mut state_for_fetcher = Arc::clone(&locked_state);
+
+    let mut convar_for_keyhandler = Arc::clone(&convar);
+    let mut state_for_keyhandler = Arc::clone(&locked_state);
+    //let key_handler_joiner = rt.spawn(key_handler(&mut locked_state, &mut convar));
+
+    let key_handler_joiner = spawn(move || {
+        rt.block_on(async move {
+            key_handler(&mut state_for_keyhandler, &mut convar_for_keyhandler).await;
+        } )});
+
+    let fetcher_handler = spawn(move || {
+        tokio::runtime::Builder::new_multi_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(async move {
+            fetcher(&haos_conn, &mut convar_for_fetcher, &mut state_for_fetcher).await;
+        }) });
+
+
     ui::draw_ui(&mut state_for_painter, &mut convar_for_painter);
 
+    key_handler_joiner.join().expect("We were unable to join the key_handler");
+    fetcher_handler.join().expect("We were unable to join the fetcher");
     Ok(())
 }
