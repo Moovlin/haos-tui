@@ -2,11 +2,11 @@ use std::sync::{Condvar, Arc, Mutex};
 
 use tui::{
     backend::CrosstermBackend,
-    widgets::{Widget, Block, Borders, Tabs, List, ListItem, ListState},
+    widgets::{Widget, Block, Borders, Tabs, List, ListItem, ListState, TableState},
     layout::{Layout, Constraint,Direction},
     Terminal,
     text::{Spans, Span},
-    style::Style,
+    style::{Style, Color},
 };
 
 use crossterm::{
@@ -19,12 +19,20 @@ use haoscli::types::Event as HAEvent;
 
 use haoscli::types::Service;
 
-use log::info;
+use log::{info, debug};
+
+
+#[derive(PartialEq)]
+pub enum Pane {
+    EventPane,
+    ServicesPane,
+    None,
+}
 
 pub struct UiState {
-    pub active: bool,
-    pub events: Vec<HAEvent>,
-    pub services: Vec<Service>,
+    pub active: Pane,
+    pub events: (Vec<HAEvent>, ListState),
+    pub services: (Vec<Service>, TableState),
 }
 
 
@@ -36,14 +44,19 @@ pub fn draw_ui(state: &mut Arc<Mutex<UiState>>, convar: &mut Arc<Condvar>) {
     let backend = CrosstermBackend::new(std_out);
     let mut terminal = Terminal::new(backend).expect("Could not load the backend");
 
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .margin(1)
+        .constraints(
+            [
+                Constraint::Percentage(50),
+                Constraint::Percentage(50),
+            ].as_ref());
 
     let mut paint_ui = || {
-        let lock_state = state.lock().unwrap();
+        let mut lock_state = state.lock().unwrap();
 
-        let mut event_list_state = ListState::default();
-        event_list_state.select(Some(0));
-
-        let event_list_items: Vec<_> = lock_state.events
+        let event_list_items: Vec<_> = lock_state.events.0
             .iter()
             .map(|event| {
                 ListItem::new(Spans::from(vec![Span::styled(
@@ -53,31 +66,25 @@ pub fn draw_ui(state: &mut Arc<Mutex<UiState>>, convar: &mut Arc<Condvar>) {
             })
             .collect();
 
-        let selected_event = lock_state.events
-            .get(
-                event_list_state
-                .selected()
-                .expect("An event should be selected"),
-            ).expect("exists")
-            .clone();
-
         terminal.draw(|f| {
             let size = f.size();
+            let locs = chunks.split(size);
             /*
             let block = Block::default()
                 .title("Bloock")
                 .borders(Borders::ALL);
             */
-            let list = List::new(event_list_items);
-            f.render_widget(list, size)
+            let list = List::new(event_list_items).highlight_style(Style::default().bg(Color::Yellow));
+            f.render_stateful_widget(list, locs[0], &mut lock_state.events.1);
         }).expect("Failed to draw the terminal UI");
     };
 
     'ui_loop: loop {
-        if !convar.wait(state.lock().unwrap()).unwrap().active {
+        if convar.wait(state.lock().unwrap()).unwrap().active == Pane::None {
             info!("Quitting since we were told to");
             break 'ui_loop;
         } else {
+            debug!("Repainting the UI");
             paint_ui();
         }
     }

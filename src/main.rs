@@ -1,16 +1,16 @@
-use log::{info, warn, debug, error};
+use log::{info};
 
 use string_builder::Builder;
 
 use tokio::io::Result;
-use haoscli::types::{HomeAssistantConnection, Event, self};
+use haoscli::types::{HomeAssistantConnection, Event};
 
 
 use serde::Deserialize;
+use tui::widgets::{ListState, TableState};
 
-use serde_json::{to_string_pretty, json};
 
-use std::{fs, env,option::Option, thread::spawn};
+use std::{fs, env,thread::spawn};
 
 use std::sync::{Arc, Mutex, Condvar};
 
@@ -24,6 +24,7 @@ use clap::{arg, command};
 
 use crate::key_handler::key_handler;
 use crate::fetcher::fetcher;
+use crate::ui::Pane;
 
 use log::LevelFilter;
 
@@ -82,6 +83,7 @@ fn main() -> Result<()>{
     
     let config = Config::new(args);
     let haos_conn = HomeAssistantConnection::new(config.url, config.client_id);
+    haos_conn.write().expect("Couldn't get the write lock on the token").set_long_live_token(config.token);
 
     
     /*
@@ -125,11 +127,16 @@ fn main() -> Result<()>{
 
     let mut locked_state = Arc::new(Mutex::new(
             ui::UiState {
-                active: true,
-                events: vec!(Event{event: String::from(""), listener_count: -1}),
-                services,
+                active: Pane::EventPane,
+                //events: vec!(Event{event: String::from(""), listener_count: -1}),
+                
+                events: (vec!(Event{event: String::from(""), listener_count: -1}), ListState::default()),
+                services: (services, TableState::default()),
             }
             ));
+
+    locked_state.lock().expect("Should be the only person with access to this").events.1.select(Some(0));
+    locked_state.lock().expect("Should be the only person with access to this").services.1.select(Some(0));
 
 
     let mut convar = Arc::new(Condvar::new());

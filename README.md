@@ -1,0 +1,1 @@
+Building a basic TUI for Home Assistant in Rust. Serves as a project to learn Rust and it's TUI interface. Heavily inspired by the ytui-music rust app as I try to learn how the pieces fit together. https://github.com/sudipghimire533/ytui-music/

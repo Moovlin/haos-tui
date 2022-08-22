@@ -1,9 +1,7 @@
-use std::{fmt::Display, sync::Arc, sync::RwLock, sync::Weak, thread::Result};
+use std::{sync::Arc, sync::RwLock, sync::Weak, thread::Result};
 
-use log::{debug, info, error};
-use reqwest::Response;
+use log::{debug, info, warn};
 
-use std::error::Error;
 use serde::{Serialize, Deserialize};
 
 use types::{HomeAssistantConnection, Token};
@@ -34,9 +32,19 @@ impl HomeAssistantConnection {
         let api = format!("{}/api/events", self.url);
         debug!("{}", api);
         let str_token = self.get_token();
+        debug!("{}", str_token);
         let req = reqwest::Client::new().get(api.as_str()).header("content-type", "application/json").bearer_auth(str_token);
+        debug!("{:#?}", req);
 
         let resp = req.send().await.unwrap();
+        match resp.error_for_status_ref() {
+            Ok(_) => (),
+            Err(err) => {
+                warn!("err.status: {}", err.status().unwrap_or_default());
+                assert_eq!(err.status(), Some(reqwest::StatusCode::UNAUTHORIZED));
+            },
+        };
+
         let resp_json: Vec<types::Event> = resp.json().await.expect("Could not convert to json");
 
         Ok(resp_json)
@@ -45,10 +53,10 @@ impl HomeAssistantConnection {
     pub async fn fire_event(&self, event_type: String, event_data: Option<impl serde::Serialize + std::fmt::Display>) -> Result<String>{
         let api = format!("{}/api/events/{}", self.url, event_type);
         let str_token = self.get_token();
-        let mut req = reqwest::Client::new().post(api.as_str()).header("content-type", "application/json").bearer_auth(str_token);
+        let req = reqwest::Client::new().post(api.as_str()).header("content-type", "application/json").bearer_auth(str_token);
 
         if let Some(data) = event_data {
-            debug!("{}", &data);
+            debug!("We're just dropping this data for now: {}", &data);
             //req = req.json(&data);
         }
 

@@ -1,10 +1,8 @@
-use std::{sync::{RwLock, Weak}, collections::HashMap, convert::From};
+use std::sync::{RwLock, Weak};
 
 
 use serde::{Serialize, Deserialize};
-use thiserror::Error;
 
-use tui::widgets::ListItem;
 
 #[derive(Debug)]
 pub struct HomeAssistantConnection {
