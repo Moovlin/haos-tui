@@ -16,6 +16,7 @@ const REFRESH_RATE: u64 = 250;
 // This is used to drop the state and call the function as such pattern is found redundant while
 // calling event handeling closure where unlocked state needs to be droppped before calling the
 // corresponding handler
+// Macro is ripped right from the https://github.com/sudipghimire533/ytui-music repo. S/O to them. 
 macro_rules! drop_and_call {
     // This will call the function in passe in second argument
     // passed function will not accept any argument
