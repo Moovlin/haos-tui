@@ -1,11 +1,11 @@
-use std::sync::{Condvar, Arc, Mutex};
+use std::{sync::{Condvar, Arc, Mutex}, borrow::Cow};
 
 use tui::{
     backend::CrosstermBackend,
-    widgets::{Widget, Block, Borders, Tabs, List, ListItem, ListState, TableState},
+    widgets::{Widget, Block, Borders, Tabs, List, ListItem, ListState, TableState, Table, Row, Cell},
     layout::{Layout, Constraint,Direction},
     Terminal,
-    text::{Spans, Span},
+    text::{Spans, Span, Text},
     style::{Style, Color},
 };
 
@@ -17,22 +17,24 @@ use crossterm::{
 
 use haoscli::types::Event as HAEvent;
 
-use haoscli::types::Service;
+use haoscli::types::{Service, State};
 
-use log::{info, debug};
+use log::{info, debug, trace};
 
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum Pane {
     EventPane,
     ServicesPane,
     None,
 }
 
+#[derive(Debug)]
 pub struct UiState {
     pub active: Pane,
     pub events: (Vec<HAEvent>, ListState),
     pub services: (Vec<Service>, TableState),
+    pub states: (Vec<State>, ListState),
 }
 
 
@@ -55,6 +57,7 @@ pub fn draw_ui(state: &mut Arc<Mutex<UiState>>, convar: &mut Arc<Condvar>) {
 
     let mut paint_ui = || {
         let mut lock_state = state.lock().unwrap();
+        //debug!("{:#?}", lock_state);
 
         let event_list_items: Vec<_> = lock_state.events.0
             .iter()
@@ -66,6 +69,20 @@ pub fn draw_ui(state: &mut Arc<Mutex<UiState>>, convar: &mut Arc<Condvar>) {
             })
             .collect();
 
+        let services_table_rows: Vec<_> = lock_state.services.0
+            .iter()
+            .map(|service| {
+                //let cells: Vec<_> = vec![Cell::from(Text::from(Cow::Owned(service.services.to_string())))];
+                //let cells: Vec<_> = vec![Cell::from(Cow::Owned(service.services.to_string()))];
+                let mut cells: Vec<Cell> = vec!(Cell::from(Cow::Owned(service.domain.to_string())).style(Style::default()));
+                //cells.push(Cell::from(Cow::Owned(service.services.to_string())));
+                cells.push(Cell::from("test"));
+                Row::new(cells).height(1).bottom_margin(1)
+            })
+        .collect();
+
+        debug!("Service table rows: {:#?}", services_table_rows);
+
         terminal.draw(|f| {
             let size = f.size();
             let locs = chunks.split(size);
@@ -73,9 +90,14 @@ pub fn draw_ui(state: &mut Arc<Mutex<UiState>>, convar: &mut Arc<Condvar>) {
             let block = Block::default()
                 .title("Bloock")
                 .borders(Borders::ALL);
+
             */
-            let list = List::new(event_list_items).highlight_style(Style::default().bg(Color::Yellow));
-            f.render_stateful_widget(list, locs[0], &mut lock_state.events.1);
+            let event_list_element = List::new(event_list_items).highlight_style(Style::default().bg(Color::Yellow));
+            f.render_stateful_widget(event_list_element, locs[0], &mut lock_state.events.1);
+
+            let services_table_element = Table::new(services_table_rows).highlight_symbol(">>>").style(Style::default()).header(Row::new(vec!["Service Name", "Service Details"]));
+            f.render_stateful_widget(services_table_element, locs[1], &mut lock_state.services.1);
+            
         }).expect("Failed to draw the terminal UI");
     };
 

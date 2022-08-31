@@ -3,7 +3,7 @@ use log::{info};
 use string_builder::Builder;
 
 use tokio::io::Result;
-use haoscli::types::{HomeAssistantConnection, Event};
+use haoscli::types::{HomeAssistantConnection, Event, State};
 
 
 use serde::Deserialize;
@@ -85,18 +85,6 @@ fn main() -> Result<()>{
     let haos_conn = HomeAssistantConnection::new(config.url, config.client_id);
     haos_conn.write().expect("Couldn't get the write lock on the token").set_long_live_token(config.token);
 
-    
-    /*
-    let working_haos_conn = match haos_conn.read() { Ok(v) => v, Err(e) => panic!("Couldn't get read lock: {}", e)};
-    info!("Firing an event to test that things work. This is annoying but hey, I'm provind a point here");
-    //let resp = rt.block_on(haos_conn.write().expect("Could not get write lock").fire_event(String::from("garbage_collection_loaded"), Some("{\"data\": \"\"}")));
-    let resp = match rt.block_on(working_haos_conn.fire_event(String::from("garbage_collection_loaded"), Some("{\"data\": \"\"}"))) {
-        Ok(v) => v,
-        Err(e) => panic!("Couldn't fire the event: {:?}", e),
-    };
-    info!("{}", resp);
-    drop(working_haos_conn);
-    */
 
     let working_haos_conn = match haos_conn.read() {Ok(v) => v, Err(e) => panic!("Couldn't get read lock: {}", e)};
     info!("Getting the service list to test that things work.");
@@ -111,19 +99,6 @@ fn main() -> Result<()>{
     info!("{}", output_string);
     drop(working_haos_conn);
 
-    /*
-    let working_haos_conn = match haos_conn.read() {Ok(v) => v, Err(e) => panic!("Couldn't get read lock: {}",e)};
-    let test_service = types::Service {domain: String::from("light"), services: json!("turn_on")};
-    let test_entity = types::RequestEntityObject{entity_id: "light.floor_lamp_level_light_color_on_off"};
-
-    let resp = match rt.block_on(working_haos_conn.set_service(test_service, Some(&test_entity))) {
-        Ok(v) => v,
-        Err(_) => panic!("Couldn't get a response"),
-    };
-
-    info!("{}", resp);
-    drop(working_haos_conn);
-    */
 
     let mut locked_state = Arc::new(Mutex::new(
             ui::UiState {
@@ -132,6 +107,7 @@ fn main() -> Result<()>{
                 
                 events: (vec!(Event{event: String::from(""), listener_count: -1}), ListState::default()),
                 services: (services, TableState::default()),
+                states: (vec!(State::default()),ListState::default())
             }
             ));
 

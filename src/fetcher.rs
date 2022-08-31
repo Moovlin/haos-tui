@@ -1,4 +1,4 @@
-use haoscli::types::{Event, HomeAssistantConnection};
+use haoscli::types::{Event, HomeAssistantConnection, Service, State};
 
 use std::{sync::{Arc, RwLock, Condvar, Mutex}, thread, time::Duration, io::Error};
 
@@ -37,7 +37,29 @@ pub async fn fetcher(haos_conn_locked: &Arc<RwLock<HomeAssistantConnection>>, co
             info!("Event: {}, listeners: {}", evnt.event, evnt.listener_count);
         }
         
-       drop(state_lock);
+        let services: Result<Vec<Service>, Error>;
+        {
+            let haos_conn = haos_conn_locked.read().expect("Couldn't get the read lock to unlock the service");
+            let temp_services = haos_conn.get_services();
+            info!("Recieved a response from HAOS");
+            services = Ok(temp_services.await.expect("Couldn't get the services"));
+        }
+
+        state_lock.services.0 = services.expect("Couldn't unwrap the services value");
+        for serv in state_lock.services.0.iter() {
+            info!("{:?}", serv);
+        }
+
+        let states: Result<Vec<State>, Error>;
+        {
+            let haos_conn = haos_conn_locked.read().expect("Couldn't get the read lock to unlock the state");
+            let temp_states = haos_conn.get_states();
+            states = Ok(temp_states.await.expect("Couldn't get the states"));
+        }
+        
+        state_lock.states.0 = states.expect("Couldn't unwrap the states value");
+
+        drop(state_lock);
 
         convar.notify_all();
 

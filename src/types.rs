@@ -1,5 +1,7 @@
 use std::sync::{RwLock, Weak};
 
+use chrono::{DateTime, serde::ts_milliseconds, Utc};
+
 
 use serde::{Serialize, Deserialize};
 
@@ -40,4 +42,10 @@ pub struct RequestEntityObject<'a> {
     pub entity_id: &'a str,
 }
 
-
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub struct State {
+    pub entity_id: String, 
+    pub state: String,
+    pub last_changed: DateTime<Utc>,
+    pub attributes: serde_json::Value,
+}
