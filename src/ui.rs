@@ -24,8 +24,9 @@ use log::{info, debug, trace};
 
 #[derive(PartialEq, Debug)]
 pub enum Pane {
-    EventPane,
-    ServicesPane,
+    Events,
+    Services,
+    States,
     None,
 }
 
@@ -51,8 +52,9 @@ pub fn draw_ui(state: &mut Arc<Mutex<UiState>>, convar: &mut Arc<Condvar>) {
         .margin(1)
         .constraints(
             [
-                Constraint::Percentage(50),
-                Constraint::Percentage(50),
+                Constraint::Percentage(25),
+                Constraint::Percentage(37),
+                Constraint::Percentage(37),
             ].as_ref());
 
     let mut paint_ui = || {
@@ -75,13 +77,22 @@ pub fn draw_ui(state: &mut Arc<Mutex<UiState>>, convar: &mut Arc<Condvar>) {
                 //let cells: Vec<_> = vec![Cell::from(Text::from(Cow::Owned(service.services.to_string())))];
                 //let cells: Vec<_> = vec![Cell::from(Cow::Owned(service.services.to_string()))];
                 let mut cells: Vec<Cell> = vec!(Cell::from(Cow::Owned(service.domain.to_string())).style(Style::default()));
-                //cells.push(Cell::from(Cow::Owned(service.services.to_string())));
-                cells.push(Cell::from("test"));
-                Row::new(cells).height(1).bottom_margin(1)
+                cells.push(Cell::from(Cow::Owned(service.services.to_string())));
+                Row::new(cells)
             })
         .collect();
 
-        debug!("Service table rows: {:#?}", services_table_rows);
+        let state_list_items: Vec<_> = lock_state.states.0
+            .iter()
+            .map(|state| {
+                ListItem::new(Spans::from(vec![Span::styled(
+                            state.entity_id.clone(),
+                            Style::default(),
+                            )]))
+            })
+            .collect();
+
+        //debug!("Service table rows: {:#?}", services_table_rows);
 
         terminal.draw(|f| {
             let size = f.size();
@@ -92,11 +103,27 @@ pub fn draw_ui(state: &mut Arc<Mutex<UiState>>, convar: &mut Arc<Condvar>) {
                 .borders(Borders::ALL);
 
             */
-            let event_list_element = List::new(event_list_items).highlight_style(Style::default().bg(Color::Yellow));
+            let event_list_element = List::new(event_list_items)
+                .highlight_style(Style::default().bg(Color::Yellow))
+                .block(Block::default().title("Services").borders(Borders::ALL));
             f.render_stateful_widget(event_list_element, locs[0], &mut lock_state.events.1);
 
-            let services_table_element = Table::new(services_table_rows).highlight_symbol(">>>").style(Style::default()).header(Row::new(vec!["Service Name", "Service Details"]));
+            let services_table_element = Table::new(services_table_rows)
+                .style(Style::default())
+                .highlight_style(Style::default().bg(Color::Yellow))
+                .header(Row::new(vec!["Service Name", "Service Details"]))
+                .block(Block::default().title("Services").borders(Borders::ALL))
+                .widths(&[
+                    Constraint::Percentage(10),
+                    Constraint::Percentage(90),
+                ]);
             f.render_stateful_widget(services_table_element, locs[1], &mut lock_state.services.1);
+
+            let states_list_element = List::new(state_list_items)
+                .block(Block::default().borders(Borders::ALL).title("States"))
+                .highlight_style(Style::default().bg(Color::Yellow))
+                .style(Style::default());
+            f.render_stateful_widget(states_list_element, locs[2], &mut lock_state.states.1);
             
         }).expect("Failed to draw the terminal UI");
     };

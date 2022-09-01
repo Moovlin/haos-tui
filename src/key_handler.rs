@@ -3,13 +3,14 @@ use std::time::Duration;
 
 use crate::ui::{UiState, Pane};
 
+use crossterm::event::KeyModifiers;
 use crossterm::{
     event::{self, Event, KeyCode},
 };
 
-use log::{debug, info, trace};
+use log::{debug, info};
 
-const REFRESH_RATE: u64 = 250;
+const REFRESH_RATE: u64 = 100;
 
 // Helper function to drop the first paramater and call the function in second paramater and
 // optional arguments provided in later arguments
@@ -21,7 +22,7 @@ macro_rules! drop_and_call {
     // This will call the function in passe in second argument
     // passed function will not accept any argument
     ($state: expr, $callback: expr) => {{
-        trace!("Dropping the state");
+        debug!("Dropping the state");
         drop($state);
         std::mem::drop($state);
         $callback()
@@ -29,7 +30,7 @@ macro_rules! drop_and_call {
     // This will call the function recived in second argument and pass the later arguments as that
     // function paramater
     ($state: expr, $callback: expr, $($args: expr)*) => {{
-        trace!("Dropping the state");
+        debug!("Dropping the state");
         std::mem::drop($state);
         $callback( $($args)* )
     }};
@@ -67,35 +68,74 @@ pub async fn key_handler (state_og: &mut Arc<Mutex<UiState>>, notifier: &mut Arc
             Ok(v) => {info!("Grabbed the state"); v},
             Err(e) => {info!("Couldn't grab the lock to move the list???: {}", e);return},
         };
-        trace!("state.events.selected:\t{}", state.events.1.selected().expect("Couldn't get what row was selected"));
+        debug!("state.events.selected:\t{}", state.events.1.selected().expect("Couldn't get what row was selected"));
         let move_to_index = match state.events.1.selected() {
             None => 0,
             Some (current) => next_index(current, state.events.0.len(), direction),
         };
         state.events.1.select(Some(move_to_index));
-        trace!("state.events.selected:\t{}", state.events.1.selected().unwrap());
+        debug!("state.events.selected:\t{}", state.events.1.selected().unwrap());
         drop(state);
         notifier.notify_all();
         
     };
 
+    let states_list_move = |direction: KeyDirection| {
+        let mut state = state_og.lock().expect("Couldn't grab the state to move.");
+        debug!("state.states.selected:\t{}", state.states.1.selected().expect("Couldn't get the row that was selected"));
+        let move_to_index = match state.states.1.selected() {
+            None => 0,
+            Some (current) => next_index(current, state.states.0.len(), direction),
+        };
+        state.states.1.select(Some(move_to_index));
+        debug!("state.states.selected:\t{}", state.states.1.selected().expect("Couldn't get the row that was selected"));
+        drop(state);
+        notifier.notify_all();
+    };
+
+    let services_table_move = |direction: KeyDirection| {
+        let mut state = state_og.lock().expect("Couldn't grab the UI state");
+        debug!("state.services.selected:\t{}", state.services.1.selected().expect("Couldn't get the row that is selected"));
+        let move_to_index = match state.services.1.selected() {
+            None => 0,
+            Some(current) => next_index(current, state.services.0.len(), direction),
+        };
+        state.services.1.select(Some(move_to_index));
+        debug!("state.services.selected:\t{}", state.services.1.selected().expect("Couldn't get the row that is selected"));
+        drop(state);
+        notifier.notify_all();
+
+    };
+
     let handle_up_or_down = |direction: KeyDirection| {
         let state = state_og.lock().expect("Couldn't lock on the UI");
         match state.active {
-            Pane::EventPane => {
+            Pane::Events => {
                 info!("Matched the eventPane");
                 drop_and_call!(state, event_list_move, direction);
             },
-            //Pane::EventPane => {info!("Matched the eventPane"); drop_and_call!(state, event_list_move, direction);},
+            Pane::States => {
+                info!("Matched the states pane");
+                drop_and_call!(state, states_list_move, direction);
+            },
+            Pane::Services => {
+                drop_and_call!(state, services_table_move, direction);
+            }
             Pane::None => _ = quit(),
             _ => ()
         }
+    };
+
+    let handle_pane_switch = |switch_to_pane: Pane| {
+        let mut state = state_og.lock().expect("Couldn't lock on the UI");
+        state.active = switch_to_pane;
     };
 
     'listener_loop: loop {
         if event::poll(Duration::from_millis(REFRESH_RATE)).unwrap() {
             match event::read().unwrap() {
                 Event::Key(key) => {
+                    let holding_ctrl = key.modifiers.contains(KeyModifiers::CONTROL);
                     match key.code {
                         KeyCode::Up => {
                             debug!("Pressed Up");
@@ -107,12 +147,18 @@ pub async fn key_handler (state_og: &mut Arc<Mutex<UiState>>, notifier: &mut Arc
                         },
                         KeyCode::Char(ch) => {
                             if ch == 'q' {
-                                info!("Quitting");
+                                info!("Got quit keypress. Quitting");
                                 if quit() {
                                     break 'listener_loop;
                                 }
+                            } else if ch == 'e' && holding_ctrl {
+                                handle_pane_switch(Pane::Events);
+                            } else if ch == 's' && holding_ctrl {
+                                handle_pane_switch(Pane::Services);
+                            } else if ch == 'x' && holding_ctrl {
+                                handle_pane_switch(Pane::States);
                             }
-                        }
+                        },
                         _ => {
                             notifier.notify_all();
                         }
@@ -120,7 +166,11 @@ pub async fn key_handler (state_og: &mut Arc<Mutex<UiState>>, notifier: &mut Arc
                 },
                 Event::FocusLost => {
                     debug!("Focus lost");
-                }
+                },
+                Event::Resize(..) => {
+                    debug!("Window was resized");
+                    notifier.notify_all();
+                },
                 _ => {}
             }
         }

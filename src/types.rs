@@ -1,4 +1,4 @@
-use std::sync::{RwLock, Weak};
+use std::{sync::{RwLock, Weak}, collections::HashMap};
 
 use chrono::{DateTime, serde::ts_milliseconds, Utc};
 
@@ -48,4 +48,8 @@ pub struct State {
     pub state: String,
     pub last_changed: DateTime<Utc>,
     pub attributes: serde_json::Value,
+}
+
+pub struct RequestStateStruct {
+    pub state: HashMap<String, String>,
 }

@@ -34,6 +34,18 @@ struct Config {
     url: String,
     token: String,
     client_id: String,
+    log_level: LogLevel,
+    poll_rate: u64,
+}
+
+#[derive(Deserialize)]
+enum LogLevel {
+    Off,
+    Error,
+    Warn,
+    Info,
+    Debug,
+    Trace,
 }
 
 impl Config {
@@ -66,22 +78,29 @@ impl Default for Args {
 }
 
 fn main() -> Result<()>{
-    simple_logging::log_to_file("log.txt", LevelFilter::Trace).expect("File doesn't exist. This should create the file or smthing I guess.");
     let matches = command!()
         .arg(arg!(-c --config <FILE>).required(false).default_value(Args::default().config_path.as_str()))
         .get_matches();
     
-    /*
-    let rt = tokio::runtime::Builder::new_current_thread().enable_all()
-        .build()?;
-    */
     let rt = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()?;
 
     let args = Args {config_path: String::from(matches.get_one::<String>("config").expect("Did not supply a value for config and a home value wasn't set."))};
+
     
     let config = Config::new(args);
+    let log_level: LevelFilter = match config.log_level {
+        LogLevel::Off => LevelFilter::Off,
+        LogLevel::Error => LevelFilter::Error,
+        LogLevel::Warn => LevelFilter::Warn,
+        LogLevel::Info => LevelFilter::Info,
+        LogLevel::Debug => LevelFilter::Debug,
+        LogLevel::Trace => LevelFilter::Trace
+    };
+    simple_logging::log_to_file("log.txt", log_level).expect("File doesn't exist. This should create the file or smthing I guess.");
+
+
     let haos_conn = HomeAssistantConnection::new(config.url, config.client_id);
     haos_conn.write().expect("Couldn't get the write lock on the token").set_long_live_token(config.token);
 
@@ -90,7 +109,7 @@ fn main() -> Result<()>{
     info!("Getting the service list to test that things work.");
     let services = match rt.block_on(working_haos_conn.get_services()) {Ok(v) => v, Err(_) => panic!("Couldn't get the services")};
     let mut string_builder: Builder = Builder::default();
-    for service in services.iter() {
+    for service in &services {
         string_builder.append(format!("{}\n", service.domain));
             //string_builder.append(serde_json::to_string_pretty(service.services.as_object().unwrap()).unwrap());
             string_builder.append("\n");
@@ -100,9 +119,9 @@ fn main() -> Result<()>{
     drop(working_haos_conn);
 
 
-    let mut locked_state = Arc::new(Mutex::new(
+    let locked_state = Arc::new(Mutex::new(
             ui::UiState {
-                active: Pane::EventPane,
+                active: Pane::Events,
                 //events: vec!(Event{event: String::from(""), listener_count: -1}),
                 
                 events: (vec!(Event{event: String::from(""), listener_count: -1}), ListState::default()),
@@ -113,6 +132,7 @@ fn main() -> Result<()>{
 
     locked_state.lock().expect("Should be the only person with access to this").events.1.select(Some(0));
     locked_state.lock().expect("Should be the only person with access to this").services.1.select(Some(0));
+    locked_state.lock().expect("Should be the only person with access to this").states.1.select(Some(0));
 
 
     let mut convar = Arc::new(Condvar::new());
@@ -139,7 +159,7 @@ fn main() -> Result<()>{
             .build()
             .unwrap()
             .block_on(async move {
-            fetcher(&haos_conn, &mut convar_for_fetcher, &mut state_for_fetcher).await;
+            fetcher(&haos_conn, &mut convar_for_fetcher, &mut state_for_fetcher, config.poll_rate).await;
         }) });
 
 

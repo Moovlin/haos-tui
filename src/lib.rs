@@ -1,8 +1,7 @@
 use std::{sync::Arc, sync::RwLock, sync::Weak, thread::Result};
 
-use log::{debug, info, warn};
+use log::{debug, info, warn, trace};
 
-use reqwest::Request;
 use serde::{Serialize, Deserialize};
 
 use types::{HomeAssistantConnection, Token};
@@ -30,13 +29,15 @@ impl HomeAssistantConnection {
     }
 
     pub async fn get_events(&self) -> Result<Vec<types::Event>>{
+        /*
         let api = format!("{}/api/events", self.url);
-        debug!("{}", api);
         let str_token = self.get_token();
         debug!("{}", str_token);
         let req = reqwest::Client::new().get(api.as_str()).header("content-type", "application/json").bearer_auth(str_token);
         debug!("{:#?}", req);
+        */
 
+        let req = self.build_base_get_request("/events");
         let resp = req.send().await.unwrap();
         match resp.error_for_status_ref() {
             Ok(_) => (),
@@ -77,27 +78,13 @@ impl HomeAssistantConnection {
 
     }
 
-    fn get_token(&self) -> &str {
-        let str_token = match &self.token {Token::LongLivedToken(str) => Ok(str), Token::None => Err("no") };
-        match str_token { Ok(v) => v, Err(e) => e}
-    }
 
     pub async fn get_services(&self) -> Result<Vec<types::Service>> {
-        let api = format!("{}/api/services", self.url);
-        let str_token = self.get_token();
-        let req = reqwest::Client::new().get(api.as_str()).header("content-type", "application/json").bearer_auth(str_token);
-        
+        let req = self.build_base_get_request("/services");
         let resp = match req.send().await {Ok(v) => v, Err(_) => panic!("Could not get services response")};
 
-
-        //let resp_text = resp.text().await.expect("Couldn't get the textual response of the service");
-        //debug!("Resp of service: {}", &resp_text);
         let resp_json: Vec<types::Service> = match resp.json().await {Ok(v) => v, Err(e) => panic!("Couldn't parse the json response:\t{}", e)};
-        //let resp_string = match resp.text().await {Ok(v) => v, Err(_) => panic!("Couldn't get the text of the response")};
-        //info!("{}", &resp_string);
-        //let resp_json: Vec<types::Service> = match serde_json::from_str(resp_string.as_str()) {Ok(v) => v, Err(_) => panic!("Couldn't parse the json")};
         Ok(resp_json)
-        //Ok(vec!(types::Service{domain: String::from("domain"), services: serde_json::from_str(resp_text.as_str()).unwrap()}))
         
     }
 
@@ -122,12 +109,38 @@ impl HomeAssistantConnection {
         let req = self.build_base_get_request("/states");
         let resp = match req.send().await {Ok(v) => v, Err(e) => panic!("Couldn't not post to service: {}", e)};
         let resp_json: Vec<types::State> = resp.json().await.expect("Couldn't convert the list of entities from json to a vec of State structs");
+        for resp in &resp_json {
+            trace!("{:?}", resp);
+        }
         Ok(resp_json)
+    }
+
+    pub async fn set_state(&self, state: types::State, payload: types::RequestStateStruct) -> Result<types::State> {
+        let req = self.build_base_put_request(format!("/states/{}", state.entity_id.as_str()).as_str()).json(&payload.state);
+
+        let resp = match req.send().await {Ok(v) => v, Err(e) => panic!("Couldn't set the state: {}", e)};
+        info!("Set state for {} responded with HTTP code: {}", state.entity_id, resp.status());
+        let resp_json: types::State = resp.json().await.expect("Couldn't convery the response of the state to a json");
+
+        Ok(resp_json)
+    }
+
+    fn build_base_put_request(&self, end_point: &str) -> reqwest::RequestBuilder {
+        let api = format!("{}/api{}", self.url, end_point);
+        debug!("api: {}", api);
+        let str_token = self.get_token();
+        reqwest::Client::new().get(api.as_str()).header("content-type", "application/json").bearer_auth(str_token)
     }
 
     fn build_base_get_request(&self, end_point: &str) ->  reqwest::RequestBuilder{
         let api = format!("{}/api{}", self.url, end_point);
+        debug!("api: {}", api);
         let str_token = self.get_token();
         reqwest::Client::new().get(api.as_str()).header("content-type", "application/json").bearer_auth(str_token)
+    }
+
+    fn get_token(&self) -> &str {
+        let str_token = match &self.token {Token::LongLivedToken(str) => Ok(str), Token::None => Err("no") };
+        match str_token { Ok(v) => v, Err(e) => e}
     }
 }
