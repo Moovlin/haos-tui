@@ -31,7 +31,7 @@ pub enum Token {
 
 /// Struct to hold data about an event listing
 #[derive(Debug, Serialize, Deserialize)]
-pub struct Event {
+pub struct Event  {
    pub event: String, 
    pub listener_count: i32,
 

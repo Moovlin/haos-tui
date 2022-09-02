@@ -236,3 +236,14 @@ fn build_states_popup() -> Layout {
             Constraint::Percentage(90)
         ])
 }
+
+struct Positions {}
+
+struct WindowElements {
+
+}
+
+
+struct StatesUIElement {
+    
+}
