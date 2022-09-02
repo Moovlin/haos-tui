@@ -1,13 +1,11 @@
-use log::{info};
+use log::info;
 
-use string_builder::Builder;
 
 use tokio::io::Result;
-use haoscli::types::{HomeAssistantConnection, Event, State};
+use haoscli::types::HomeAssistantConnection;
 
 
 use serde::Deserialize;
-use tui::widgets::{ListState, TableState};
 
 
 use std::{fs, env,thread::spawn};
@@ -24,7 +22,6 @@ use clap::{arg, command};
 
 use crate::key_handler::key_handler;
 use crate::fetcher::fetcher;
-use crate::ui::Pane;
 
 use log::LevelFilter;
 
@@ -105,43 +102,19 @@ fn main() -> Result<()>{
     haos_conn.write().expect("Couldn't get the write lock on the token").set_long_live_token(config.token);
 
 
-    let working_haos_conn = match haos_conn.read() {Ok(v) => v, Err(e) => panic!("Couldn't get read lock: {}", e)};
-    info!("Getting the service list to test that things work.");
-    let services = match rt.block_on(working_haos_conn.get_services()) {Ok(v) => v, Err(_) => panic!("Couldn't get the services")};
-    let mut string_builder: Builder = Builder::default();
-    for service in &services {
-        string_builder.append(format!("{}\n", service.domain));
-            //string_builder.append(serde_json::to_string_pretty(service.services.as_object().unwrap()).unwrap());
-            string_builder.append("\n");
-    }
-    let output_string = match string_builder.string() {Ok(v) => v, Err(e) => panic!("Couldn't build string: {}", e)};
-    info!("{}", output_string);
-    drop(working_haos_conn);
-
-
-    let locked_state = Arc::new(Mutex::new(
-            ui::UiState {
-                active: Pane::Events,
-                //events: vec!(Event{event: String::from(""), listener_count: -1}),
-                
-                events: (vec!(Event{event: String::from(""), listener_count: -1}), ListState::default()),
-                services: (services, TableState::default()),
-                states: (vec!(State::default()),ListState::default())
-            }
-            ));
-
+    let locked_state = Arc::new(Mutex::new(ui::UiState::default()));
     locked_state.lock().expect("Should be the only person with access to this").events.1.select(Some(0));
     locked_state.lock().expect("Should be the only person with access to this").services.1.select(Some(0));
     locked_state.lock().expect("Should be the only person with access to this").states.1.select(Some(0));
 
 
-    let mut convar = Arc::new(Condvar::new());
+    let convar = Arc::new(Condvar::new());
 
     let mut convar_for_painter = Arc::clone(&convar);
     let mut state_for_painter = Arc::clone(&locked_state);
 
 
-    let mut convar_for_fetcher = Arc::clone(&convar);
+    let convar_for_fetcher = Arc::clone(&convar);
     let mut state_for_fetcher = Arc::clone(&locked_state);
 
     let mut convar_for_keyhandler = Arc::clone(&convar);
@@ -159,7 +132,7 @@ fn main() -> Result<()>{
             .build()
             .unwrap()
             .block_on(async move {
-            fetcher(&haos_conn, &mut convar_for_fetcher, &mut state_for_fetcher, config.poll_rate).await;
+            fetcher(&haos_conn, &convar_for_fetcher, &mut state_for_fetcher, config.poll_rate).await;
         }) });
 
 

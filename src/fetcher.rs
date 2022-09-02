@@ -6,7 +6,6 @@ use log::{trace, info};
 
 use crate::ui::{UiState, Pane};
 
-const REQUEST_WAIT: u64 = 10000;
 
 pub async fn fetcher(haos_conn_locked: &Arc<RwLock<HomeAssistantConnection>>, convar: &Arc<Condvar>, state: &mut Arc<Mutex<UiState>>, poll_rate: u64) {
     

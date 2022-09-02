@@ -29,14 +29,6 @@ impl HomeAssistantConnection {
     }
 
     pub async fn get_events(&self) -> Result<Vec<types::Event>>{
-        /*
-        let api = format!("{}/api/events", self.url);
-        let str_token = self.get_token();
-        debug!("{}", str_token);
-        let req = reqwest::Client::new().get(api.as_str()).header("content-type", "application/json").bearer_auth(str_token);
-        debug!("{:#?}", req);
-        */
-
         let req = self.build_base_get_request("/events");
         let resp = req.send().await.unwrap();
         match resp.error_for_status_ref() {
