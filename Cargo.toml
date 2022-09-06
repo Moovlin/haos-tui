@@ -6,19 +6,15 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-log="0.4.17"
-env_logger="0.9.0"
-toml = "0.5.9"
-thiserror = "1.0.32"
-futures = "0.3.21"
-async-std = "1.12.0"
-tokio = {version = "1.20.1", features = ["full"] }
-reqwest = { version = "0.11", features = ["json"] }
-serde = { version = "1.0.142", features = ["derive"]}
-serde_json = "1.0"
-clap = { version = "3.2.16", features = ["derive", "cargo"] }
-string-builder = "0.2.0"
-tui = "0.19.0"
-crossterm = "0.25.0"
-simple-logging = "2.0.2"
-chrono = {version = "0.4.22", features = ["serde"]}
+log="0.4.17"    # MIT/Apache
+toml = "0.5.9"    # MIT/Apache
+async-std = "1.12.0"    # Apache/MIT
+tokio = {version = "1.20.1", features = ["full"] }   # MIT license
+reqwest = { version = "0.11", features = ["json"] }  #Apache
+serde = { version = "1.0.142", features = ["derive"]}   # MIT or Apache (take your pick)
+serde_json = "1.0"    #MIT or Apache
+clap = { version = "3.2.16", features = ["derive", "cargo"] }    # MIT or Apache
+tui = "0.19.0"    # MIT
+crossterm = "0.25.0"    # MIT
+simple-logging = "2.0.2"    # BSD3
+chrono = {version = "0.4.22", features = ["serde"]}   #MIT/Apache

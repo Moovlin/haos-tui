@@ -4,12 +4,15 @@ Building a basic TUI for Home Assistant in Rust. Serves as a project to learn Ru
 Goals for the next commit:
 - [-] Refactor out some repeated code in each module.
     This is not perfect. Some repeat code has been removed but I'm sure as the code becomes more modular & less of a spaghetti code base more will present itself. 
-- [ ] Being able to take in User input, then send that state back to HAOS (raw input or maybe do some very basic type matching or something?)
+- [-] Being able to take in User input, then send that state back to HAOS (raw input or maybe do some very basic type matching or something?)
+    This is working with the states. Next step is making it work with services. I only take raw JSON input for now but that's just POC. 
 - [X] Comments!
   While the comments aren't amazing. Things are documented so it makes development a smidge easier. 
 - [ ] Unit tests!
 - [ ] Confirm a close or if there is a "<CTRL> + q" we can force quit. 
-- [ ] Pick a license
+    Not doing this for the next public one, it's annoying but just don't need it currently. 
+- [X] Pick a license
+    Going with MIT. 
 
 Some fun next steps:
 - [-] I want to be able to create pop ups that allow for me to select a
