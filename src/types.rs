@@ -7,6 +7,10 @@ use chrono::{DateTime, Utc};
 
 use serde::{Deserialize, Serialize};
 
+trait HomeAssistantStateful {
+    fn get(&self);
+}
+
 /// Struct related to the HomeAssistant instance
 /// Currently only handles long term token and uses the REST end points.
 #[derive(Debug)]
@@ -32,14 +36,14 @@ pub enum Token {
 }
 
 /// Struct to hold data about an event listing
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct Event {
     pub event: String,
     pub listener_count: i32,
 }
 
 /// Struct to hold the service information.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default, Clone)]
 pub struct Service {
     /// The domain of the service, IE: Lights, alarms, etc.
     pub domain: String,
@@ -48,8 +52,20 @@ pub struct Service {
     pub services: serde_json::Value,
 }
 
+#[derive(Debug)]
+pub struct RequestServiceStruct <'a> {
+    pub domain: &'a str,
+    pub service: &'a str,
+}
+
+impl HomeAssistantStateful for Service {
+    fn get(&self) {
+    }
+}
+
+
 /// Used to create a request information about an entity, passes in the entity id.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 pub struct RequestEntityObject<'a> {
     pub entity_id: &'a str,
 }
@@ -62,6 +78,8 @@ pub struct State {
     pub last_changed: DateTime<Utc>,
     pub attributes: serde_json::Value,
 }
+
+
 
 /// Used to get the request state. Hashmap for the values & whatnot.
 pub struct RequestStateStruct {

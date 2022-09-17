@@ -1,12 +1,15 @@
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
 
-use crate::ui::{Pane, PopUpPane, UiState};
+use crate::ui_types::{Pane, PopUpPane, UiState, ServicesPopUpElement, BuildTable};
 
 use crossterm::event::KeyModifiers;
 use crossterm::event::{self, Event, KeyCode};
 
+use haoscli::types::Service;
 use log::{debug, info, warn};
+use tui::layout::Rect;
+use tui::widgets::TableState;
 
 const REFRESH_RATE: u64 = 100;
 
@@ -151,6 +154,28 @@ pub async fn key_handler(state_og: &mut Arc<Mutex<UiState>>, notifier: &mut Arc<
         notifier.notify_all();
     };
 
+    let services_popup_table_move = |direction: KeyDirection| {
+        let mut state = state_og.lock().expect("Couldn't grab the UI State");
+
+
+        debug!("state.services_popup.0.services:\t{:?}", state.services_popup.0.services);
+        debug!("state.services_popup.1.selected():\t{:?}", state.services_popup.1.selected());
+
+        let state_map = state.services_popup.0.services.as_object().unwrap();
+        
+        let move_to_index = match state.services_popup.1.selected() {
+            None => 0,
+            Some(current) => next_index(current, state_map.len(), direction),
+        };
+
+        state.services_popup_selected = state_map.keys().nth(move_to_index).unwrap().into();
+        debug!("state.services_popup_selected:\t{}", state.services_popup_selected);
+        state.services_popup.1.select(Some(move_to_index));
+        debug!("state.services_popup.1.selected():\t{:?}", state.services_popup.1.selected());
+        drop(state);
+        notifier.notify_all();
+    };
+
     let handle_up_or_down = |direction: KeyDirection| {
         let state = state_og.lock().expect("Couldn't lock on the UI");
         match state.active {
@@ -164,6 +189,9 @@ pub async fn key_handler(state_og: &mut Arc<Mutex<UiState>>, notifier: &mut Arc<
             }
             Pane::Services => {
                 drop_and_call!(state, services_table_move, direction);
+            }
+            Pane::PopUp(PopUpPane::Services) => {
+                drop_and_call!(state, services_popup_table_move, direction);
             }
             Pane::None => _ = quit(),
             _ => (),
@@ -183,7 +211,13 @@ pub async fn key_handler(state_og: &mut Arc<Mutex<UiState>>, notifier: &mut Arc<
         let mut state = state_og.lock().expect("Couldn't lock on the UI");
         match state.active {
             Pane::Events => state.active = Pane::PopUp(PopUpPane::Events),
-            Pane::Services => state.active = Pane::PopUp(PopUpPane::Services),
+            Pane::Services => {
+                state.active = Pane::PopUp(PopUpPane::Services);
+                let sel_service: &Service = state.get_selected_service();
+                let mut popup_state = TableState::default();
+                popup_state.select(Some(0));
+                state.services_popup = (sel_service.clone(), popup_state);
+            },
             Pane::States => state.active = Pane::PopUp(PopUpPane::States),
             Pane::PopUp(_) => state.input_pane.1 = true,
             Pane::Search => todo!("Not implemented"),
@@ -215,6 +249,9 @@ pub async fn key_handler(state_og: &mut Arc<Mutex<UiState>>, notifier: &mut Arc<
             Pane::PopUp(PopUpPane::None) => debug!("tf???"),
             _ => debug!("Ignoring escape press for non-pop up panes"),
         }
+        state.input_pane = (String::from(""), false); // THIS IS BAD BUT HEY I'M WORKING TOWARD AN
+                                                      // MVP. WE WILL HAVE TO ACCEPT THIS AS A
+                                                      // REALITY. 
         notifier.notify_all();
     };
 

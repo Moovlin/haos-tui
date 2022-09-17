@@ -73,8 +73,8 @@ impl HomeAssistantConnection {
         let resp_json: Response = match resp.json().await {
             Ok(v) => v,
             Err(_) => panic!("Couldn't parse the json response"),
-        };
-        Ok(resp_json.message)
+            };
+            Ok(resp_json.message)
     }
 
     pub async fn get_services(&self) -> Result<Vec<types::Service>> {
@@ -93,15 +93,18 @@ impl HomeAssistantConnection {
 
     pub async fn set_service(
         &self,
-        service: types::Service,
+        service: &types::RequestServiceStruct<'_>,
         entity: Option<&'_ types::RequestEntityObject<'_>>,
     ) -> Result<serde_json::Value> {
+        debug!("lib.set_service.service:\t{:#?}",service);
         let api = format!(
             "{}/api/services/{}/{}",
             self.url,
             service.domain,
-            service.services.as_str().unwrap()
+            service.service
         );
+
+
 
         let str_token = self.get_token();
         let mut req = reqwest::Client::new()
@@ -112,6 +115,10 @@ impl HomeAssistantConnection {
             Some(v) => req = req.json(&v),
             None => (),
         }
+
+
+        debug!("{:?}", req);
+
         let resp = match req.send().await {
             Ok(v) => v,
             Err(e) => panic!("Could not post to service: {}", e),

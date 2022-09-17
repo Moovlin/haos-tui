@@ -12,11 +12,13 @@ use std::sync::{Arc, Condvar, Mutex};
 mod fetcher;
 mod key_handler;
 mod ui;
+mod ui_types;
 
 use clap::{arg, command};
 
 use crate::fetcher::fetcher;
 use crate::key_handler::key_handler;
+use crate::ui_types::{UiState};
 
 use log::LevelFilter;
 
@@ -110,7 +112,7 @@ fn main() -> Result<()> {
         .expect("Couldn't get the write lock on the token")
         .set_long_live_token(config.token);
 
-    let locked_state = Arc::new(Mutex::new(ui::UiState::default()));
+    let locked_state = Arc::new(Mutex::new(UiState::default()));
     locked_state
         .lock()
         .expect("Should be the only person with access to this")

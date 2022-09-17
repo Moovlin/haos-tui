@@ -9,7 +9,7 @@ use tui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Style},
     text::{Span, Spans},
-    widgets::{self, Block, Borders, Cell, List, ListItem, ListState, Row, Table, TableState, Paragraph},
+    widgets::{self, Block, Borders, Cell, List, ListItem, ListState, Row, Table, TableState, Paragraph, StatefulWidget, Widget},
     Terminal,
 };
 
@@ -23,6 +23,9 @@ use haoscli::types::Event as HAEvent;
 
 use haoscli::types::{Service, State};
 
+use crate::ui_types::{ServicesPopUpElement, EventsPopUpElement, StatesPopUpElement, BuildPopup, BuildList, BuildTable, Pane, PopUpPane, UiState};
+
+
 use log::{debug, info};
 
 const POPUP_OFFSET: u16 = 5;
@@ -34,39 +37,6 @@ fn reset_terminal() -> Result<(), ()> {
     Ok(())
 }
 
-/// Enum to determine which pane is currently the active pane.
-#[derive(PartialEq, Debug, Default, Clone)]
-pub enum Pane {
-    #[default]
-    Events,
-    Services,
-    States,
-    PopUp(PopUpPane),
-    Search,
-    None,
-}
-
-/// Enum to determine where we need to look for the selected item to create a pop up for it.
-#[derive(PartialEq, Debug, Default, Clone)]
-pub enum PopUpPane {
-    Events,
-    Services,
-    States,
-    #[default]
-    None,
-}
-
-/// Struct which holds the state of the UI. For each pane, there is the associated data and then,
-/// assuming that the widget is stateful, the state for that widget.
-#[derive(Debug, Default)]
-pub struct UiState {
-    pub active: Pane,
-    pub events: (Vec<HAEvent>, ListState),
-    pub services: (Vec<Service>, TableState),
-    pub states: (Vec<State>, ListState),
-    pub search: String,
-    pub input_pane: (String, bool)
-}
 
 /// This function loops until quit is called. It draws each UI element.
 pub fn draw_ui(state: &mut Arc<Mutex<UiState>>, convar: &mut Arc<Condvar>) {
@@ -117,8 +87,6 @@ pub fn draw_ui(state: &mut Arc<Mutex<UiState>>, convar: &mut Arc<Condvar>) {
             .0
             .iter()
             .map(|service| {
-                //let cells: Vec<_> = vec![Cell::from(Text::from(Cow::Owned(service.services.to_string())))];
-                //let cells: Vec<_> = vec![Cell::from(Cow::Owned(service.services.to_string()))];
                 let mut cells: Vec<Cell> = vec![
                     Cell::from(Cow::Owned(service.domain.to_string())).style(Style::default())
                 ];
@@ -199,13 +167,13 @@ pub fn draw_ui(state: &mut Arc<Mutex<UiState>>, convar: &mut Arc<Condvar>) {
                     let states_loc = lock_state.states.1.selected().unwrap();
                     let passing_states = lock_state.states.0.get(states_loc).unwrap();
                     let popup = StatesPopUpElement::new(popup_block, passing_states);
-                    let (popup_list, mut popup_state) = popup.build_states_element();
-                    let screen_locs = popup.build_states_popup();
+                    let (popup_table, mut popup_state) = popup.build_table_element();
+                    let screen_locs = popup.build_popup();
 
                     f.render_widget(widgets::Clear, popup_block);
                     
                     // Building the table
-                    f.render_stateful_widget(popup_list, screen_locs[1], &mut popup_state);
+                    f.render_stateful_widget(popup_table, screen_locs[1], &mut popup_state);
 
                     // Building the text input
                     let text = Paragraph::new(lock_state.input_pane.0.clone());
@@ -213,7 +181,23 @@ pub fn draw_ui(state: &mut Arc<Mutex<UiState>>, convar: &mut Arc<Condvar>) {
 
                     
                 },
-                Pane::PopUp(PopUpPane::Services) => debug!("Rendering a pop up for services over the rest of the windows"),
+                Pane::PopUp(PopUpPane::Services) => {
+                    debug!("Rendering a pop up for services over the rest of the windows");
+                    let services_loc = lock_state.services.1.selected().unwrap();
+                    let passing_service = lock_state.services.0.get(services_loc).unwrap().clone();
+                    // I think what's happening with the UI is that I'm creating a new state each
+                    // paint. I think this is why it's happening. 
+                    let popup = ServicesPopUpElement::new(popup_block, &passing_service);
+                    let (popup_table, _) = popup.build_table_element();
+                    let screen_locs = popup.build_popup();
+                    //lock_state.services_popup = (passing_service.clone(), popup_state);
+
+                    f.render_widget(widgets::Clear, popup_block);
+                    debug!{"painting_ui:service_popup_selected:\t{:?}", lock_state.services_popup.1.selected()};
+                    f.render_stateful_widget(popup_table, screen_locs[1], &mut lock_state.services_popup.1);
+                    let text = Paragraph::new(lock_state.input_pane.0.clone());
+                    f.render_widget(text, screen_locs[2]);
+                },
                 _ => debug!("Not building a pop up as it's not marked as active. Current active pane: {:?}", lock_state.active),
             };
         }).expect("Failed to draw the terminal UI");
@@ -251,71 +235,4 @@ fn build_event_element(event: &'_ HAEvent) -> (List, ListState) {
     let mut ret_list_state = ListState::default();
     ret_list_state.select(Some(0));
     (ret_list, ret_list_state)
-}
-
-struct Positions {
-
-}
-
-struct WindowElements {}
-
-struct StatesUIElement {}
-
-struct EventsPopUpElement {
-    popup_loc: Rect,
-}
-
-impl EventsPopUpElement {
-}
-
-
-struct StatesPopUpElement <'popup> {
-    //text_bar_loc: Rect,
-    //table_loc: Rect,
-    popup_loc: Rect,
-    state: &'popup State,
-}
-
-impl <'popup> StatesPopUpElement <'popup> {
-    fn new(popup_loc: Rect, state: &'popup State) -> Self {
-        StatesPopUpElement {
-            popup_loc,
-            state,
-        }
-    }
-
-    fn build_states_popup(&self) -> Vec<Rect> {
-        Layout::default()
-            .direction(Direction::Vertical)
-            .margin(1)
-            .constraints([Constraint::Percentage(10), Constraint::Percentage(30), Constraint::Percentage(60)])
-            .split(self.popup_loc)
-    }
-
-    fn build_states_element(&self) -> (Table, TableState) {
-        let states_table_rows: Vec<Row> = vec![Row::new(vec![
-            Cell::from(Cow::Owned(self.state.state.to_string())),
-            Cell::from(Cow::Owned(self.state.last_changed.to_string())),
-            Cell::from(Cow::Owned(self.state.attributes.to_string())),
-        ])];
-
-        let state_table = Table::new(states_table_rows)
-            .style(Style::default())
-            .highlight_style(Style::default().bg(Color::Yellow).fg(Color::Black))
-            .header(Row::new(vec!["State", "Changed Last At", "Attributes"]))
-            .block(
-                Block::default()
-                    .borders(Borders::ALL)
-                    .title(self.state.entity_id.clone()),
-            )
-            .widths(&[
-                Constraint::Percentage(10),
-                Constraint::Percentage(10),
-                Constraint::Percentage(80),
-            ]);
-        let mut ret_table_state = TableState::default();
-        ret_table_state.select(Some(0));
-        (state_table, ret_table_state)
-    }
-
 }

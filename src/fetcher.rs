@@ -1,4 +1,4 @@
-use haoscli::types::{Event, HomeAssistantConnection, Service, State, RequestEntityObject, RequestStateStruct};
+use haoscli::types::{Event, HomeAssistantConnection, Service, State, RequestEntityObject, RequestStateStruct, RequestServiceStruct};
 
 use std::{
     io::Error,
@@ -7,10 +7,12 @@ use std::{
     time::Duration,
 };
 
-use log::{info, trace, warn};
+use log::{info, trace, warn, debug};
 
-use crate::ui::{Pane, UiState};
+use crate::ui_types::{Pane, UiState, PopUpPane};
 
+
+#[allow(clippy::await_holding_lock)]
 pub async fn fetcher(
     haos_conn_locked: &Arc<RwLock<HomeAssistantConnection>>,
     convar: &Arc<Condvar>,
@@ -24,6 +26,7 @@ pub async fn fetcher(
                 Ok(v) => v,
                 Err(e) => {
                     warn!("Error getting UI lock in the fetcher: {}", e);
+                    thread::sleep(Duration::from_millis(250));
                     continue;
                 }
             };
@@ -39,16 +42,28 @@ pub async fn fetcher(
         //let state_update: Result<State, Error>;
         if state_lock.input_pane.1 {
             let haos_conn = haos_conn_locked.read().expect("Couldn't get the read lock");
+            match state_lock.active {
+                Pane::PopUp(PopUpPane::States) => {
+                    let selected_state = state_lock.states.0.get(state_lock.states.1.selected().expect("Couldn't get the selected value")).expect("Couldn't select the selected state from the list of states");
+                    let set_state = RequestStateStruct{state: serde_json::from_str(state_lock.input_pane.0.as_str()).expect("Couldn't parse the text as a json") };
+                    _ = haos_conn.set_state(selected_state, set_state).await.expect("Couldn't send the data to the end point");
+                },
+                Pane::PopUp(PopUpPane::Services) => {
+                    let selected_service = state_lock.services.0.get(state_lock.services.1.selected().expect("Couldn't get the selected value")).expect("Couldn't get the selected state in the UI from the UIState object");
+                    let entity_to_set = RequestEntityObject{entity_id: state_lock.input_pane.0.as_str()};
+                    let service_to_send = RequestServiceStruct{domain: selected_service.domain.as_str(), service: state_lock.services_popup_selected.as_str()};
+                    debug!("entity_to_set:\t{:?}, service_to_send:\t{:?}", entity_to_set, service_to_send);
+
+                    _ = haos_conn.set_service(&service_to_send, Some(&entity_to_set)).await.expect("couldn't send the data to the end point");
+                },
+                Pane::PopUp(PopUpPane::Events) => {
+                    todo!("Currently don't support sending an event, sorry")
+                },
+                _ => (),
+            }
 
             // Getting the seleted state
-            let selected_state = state_lock.states.0.get(state_lock.states.1.selected().expect("Couldn't get the selected value")).expect("Couldn't select the selected state from the list of states");
-            
-            let set_state = RequestStateStruct{state: serde_json::from_str(state_lock.input_pane.0.as_str()).expect("Couldn't parse the text as a json") };
-
-            _ = haos_conn.set_state(selected_state, set_state).await.expect("Couldn't send the data to the end point");
-
-            state_lock.input_pane.0 = String::from("");
-            state_lock.input_pane.1 = false;
+            state_lock.input_pane = (String::from(""), false);
         }
 
         drop(state_lock);
